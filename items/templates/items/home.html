@@ -1,46 +1,19 @@
 {% extends 'base.html' %}
-{% load widget_tweaks %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h2 class="card-title">Report an Item</h2>
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
-                        {{ form.title }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
-                        {{ form.description }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ form.location.id_for_label }}" class="form-label">Location</label>
-                        {{ form.location }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ form.status.id_for_label }}" class="form-label">Status</label>
-                        {{ form.status }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ form.contact_info.id_for_label }}" class="form-label">Contact Information</label>
-                        {{ form.contact_info }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ form.tags_input.id_for_label }}" class="form-label">Tags</label>
-                        {{ form.tags_input }}
-                        <small class="form-text text-muted">Enter tags separated by commas (e.g., "red, leather, wallet")</small>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Submit</button>
-                </form>
-            </div>
+<div class="row mb-4">
+    <div class="col-md-6 offset-md-3 text-center">
+        <h1 class="mb-4">Lost and Found</h1>
+        <div class="d-grid gap-3">
+            <a href="{% url 'report_found' %}" class="btn btn-primary btn-lg">I Found Something</a>
+            <a href="{% url 'report_lost' %}" class="btn btn-secondary btn-lg">I Lost Something</a>
         </div>
     </div>
-    <div class="col-md-6">
-        <h2>Recent Items</h2>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">Recent Items</h2>
         {% for item in items %}
         <div class="card mb-3">
             <div class="card-body">

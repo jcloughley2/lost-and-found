@@ -1,31 +1,32 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import Item
-from .forms import ItemForm
+from .forms import FoundItemForm, LostItemForm
+import logging
+
+logger = logging.getLogger(__name__)
 
 def home(request):
-    if request.method == 'POST':
-        form = ItemForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Item reported successfully!')
-            return redirect('home')
-    else:
-        form = ItemForm()
-    
     items = Item.objects.all().order_by('-date')
-    return render(request, 'items/home.html', {
-        'form': form,
-        'items': items
-    })
+    return render(request, 'items/home.html', {'items': items})
 
 def report_found(request):
     if request.method == 'POST':
+        logger.debug("Processing POST request for found item")
         form = FoundItemForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Found item has been successfully listed!')
+            logger.debug("Found item form is valid, saving")
+            try:
+                item = form.save()
+                logger.debug(f"Found item saved successfully. ID: {item.id}")
+                logger.debug(f"Tags after save: {list(item.tags.all())}")
+                messages.success(request, 'Found item has been reported successfully!')
+            except Exception as e:
+                logger.error(f"Error saving found item: {str(e)}")
+                messages.error(request, 'Error saving item')
             return redirect('home')
+        else:
+            logger.error(f"Form errors: {form.errors}")
     else:
         form = FoundItemForm()
     
@@ -33,11 +34,21 @@ def report_found(request):
 
 def report_lost(request):
     if request.method == 'POST':
+        logger.debug("Processing POST request for lost item")
         form = LostItemForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Lost item has been successfully listed!')
+            logger.debug("Lost item form is valid, saving")
+            try:
+                item = form.save()
+                logger.debug(f"Lost item saved successfully. ID: {item.id}")
+                logger.debug(f"Tags after save: {list(item.tags.all())}")
+                messages.success(request, 'Lost item has been reported successfully!')
+            except Exception as e:
+                logger.error(f"Error saving lost item: {str(e)}")
+                messages.error(request, 'Error saving item')
             return redirect('home')
+        else:
+            logger.error(f"Form errors: {form.errors}")
     else:
         form = LostItemForm()
     
