@@ -1,0 +1,770 @@
+diff --git a/.gitignore b/.gitignore
+index 0519ecb..a473809 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1 +1,24 @@
+- 
+\ No newline at end of file
++# Python
++__pycache__/
++*.py[cod]
++*$py.class
++*.so
++.Python
++venv/
++
++# Django
++*.log
++local_settings.py
++db.sqlite3
++db.sqlite3-journal
++media/
++
++# IDE
++.idea/
++.vscode/
++*.swp
++*.swo
++
++# OS
++.DS_Store
++Thumbs.db 
+\ No newline at end of file
+diff --git a/db.sqlite3 b/db.sqlite3
+index 190dbb3..bb13e2e 100644
+Binary files a/db.sqlite3 and b/db.sqlite3 differ
+diff --git a/items/__pycache__/forms.cpython-313.pyc b/items/__pycache__/forms.cpython-313.pyc
+index 135303b..5c6748f 100644
+Binary files a/items/__pycache__/forms.cpython-313.pyc and b/items/__pycache__/forms.cpython-313.pyc differ
+diff --git a/items/__pycache__/models.cpython-313.pyc b/items/__pycache__/models.cpython-313.pyc
+index ff4e0b9..f7ba32d 100644
+Binary files a/items/__pycache__/models.cpython-313.pyc and b/items/__pycache__/models.cpython-313.pyc differ
+diff --git a/items/__pycache__/views.cpython-313.pyc b/items/__pycache__/views.cpython-313.pyc
+index 69250d8..b5e8009 100644
+Binary files a/items/__pycache__/views.cpython-313.pyc and b/items/__pycache__/views.cpython-313.pyc differ
+diff --git a/items/forms.py b/items/forms.py
+index 956e7b3..68ebd73 100644
+--- a/items/forms.py
++++ b/items/forms.py
+@@ -1,41 +1,29 @@
+ from django import forms
+-from .models import Item, Tag
+-
+-class ItemForm(forms.ModelForm):
+-    tags_input = forms.CharField(
+-        required=False,
+-        widget=forms.TextInput(attrs={
+-            'class': 'form-control',
+-            'data-role': 'tagsinput',
+-            'placeholder': 'Add tags...'
+-        })
+-    )
++from .models import Item
+ 
++class ItemFormBase(forms.ModelForm):
+     class Meta:
+         model = Item
+-        fields = ['title', 'description', 'location', 'status', 'contact_info', 'tags_input']
++        fields = ['title', 'description', 'location', 'contact_info']
+         widgets = {
+             'title': forms.TextInput(attrs={'class': 'form-control'}),
+-            'description': forms.Textarea(attrs={'class': 'form-control'}),
++            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+             'location': forms.TextInput(attrs={'class': 'form-control'}),
+-            'status': forms.Select(attrs={'class': 'form-control'}),
+             'contact_info': forms.TextInput(attrs={'class': 'form-control'}),
+         }
+ 
+-    def clean_tags_input(self):
+-        tags_input = self.cleaned_data.get('tags_input', '')
+-        if not tags_input:
+-            return []
+-        tag_names = [t.strip().lower() for t in tags_input.split(',') if t.strip()]
+-        tags = []
+-        for tag_name in tag_names:
+-            tag, _ = Tag.objects.get_or_create(name=tag_name)
+-            tags.append(tag)
+-        return tags
++class FoundItemForm(ItemFormBase):
++    def save(self, commit=True):
++        instance = super().save(commit=False)
++        instance.status = 'found'
++        if commit:
++            instance.save()
++        return instance
+ 
++class LostItemForm(ItemFormBase):
+     def save(self, commit=True):
+         instance = super().save(commit=False)
++        instance.status = 'lost'
+         if commit:
+             instance.save()
+-            instance.tags.set(self.cleaned_data.get('tags_input', []))
+         return instance 
+\ No newline at end of file
+diff --git a/items/migrations/__pycache__/0001_initial.cpython-313.pyc b/items/migrations/__pycache__/0001_initial.cpython-313.pyc
+index 5e49fa4..bd7c4c8 100644
+Binary files a/items/migrations/__pycache__/0001_initial.cpython-313.pyc and b/items/migrations/__pycache__/0001_initial.cpython-313.pyc differ
+diff --git a/items/models.py b/items/models.py
+index d82fb7e..601f0c8 100644
+--- a/items/models.py
++++ b/items/models.py
+@@ -1,5 +1,9 @@
+ from django.db import models
+ from django.utils import timezone
++from .tag_utils import generate_tags
++import logging
++
++logger = logging.getLogger(__name__)
+ 
+ class Tag(models.Model):
+     name = models.CharField(max_length=50, unique=True)
+@@ -22,4 +26,35 @@ class Item(models.Model):
+     tags = models.ManyToManyField(Tag, blank=True)
+     
+     def __str__(self):
+-        return f"{self.get_status_display()}: {self.title}"
++        return f"{self.title} ({self.status})"
++    
++    def save(self, *args, **kwargs):
++        logger.debug(f"Starting save for item: {self.title}")
++        is_new = self.pk is None
++        logger.debug(f"Is new item: {is_new}")
++        
++        # First save the item to get an ID
++        super().save(*args, **kwargs)
++        logger.debug(f"Basic save completed. Item ID: {self.pk}")
++        
++        # Generate tags if none exist
++        current_tags = self.tags.count()
++        logger.debug(f"Current tag count: {current_tags}")
++        
++        if current_tags == 0:
++            logger.debug("No existing tags found, generating new tags")
++            try:
++                generated_tags = generate_tags(self.title, self.description)
++                logger.debug(f"Generated tags: {generated_tags}")
++                
++                # Create or get tags and add them to the item
++                for tag_name in generated_tags:
++                    tag, created = Tag.objects.get_or_create(name=tag_name)
++                    logger.debug(f"{'Created' if created else 'Found existing'} tag: {tag_name}")
++                    self.tags.add(tag)
++                
++                logger.debug(f"Final tag count: {self.tags.count()}")
++            except Exception as e:
++                logger.error(f"Error generating tags: {str(e)}")
++        else:
++            logger.debug(f"Item already has {current_tags} tags")
+diff --git a/items/templates/items/home.html b/items/templates/items/home.html
+index 4a719bf..9571eb3 100644
+--- a/items/templates/items/home.html
++++ b/items/templates/items/home.html
+@@ -1,46 +1,19 @@
+ {% extends 'base.html' %}
+-{% load widget_tweaks %}
+ 
+ {% block content %}
+-<div class="row">
+-    <div class="col-md-6">
+-        <div class="card">
+-            <div class="card-body">
+-                <h2 class="card-title">Report an Item</h2>
+-                <form method="post">
+-                    {% csrf_token %}
+-                    <div class="mb-3">
+-                        <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
+-                        {{ form.title }}
+-                    </div>
+-                    <div class="mb-3">
+-                        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+-                        {{ form.description }}
+-                    </div>
+-                    <div class="mb-3">
+-                        <label for="{{ form.location.id_for_label }}" class="form-label">Location</label>
+-                        {{ form.location }}
+-                    </div>
+-                    <div class="mb-3">
+-                        <label for="{{ form.status.id_for_label }}" class="form-label">Status</label>
+-                        {{ form.status }}
+-                    </div>
+-                    <div class="mb-3">
+-                        <label for="{{ form.contact_info.id_for_label }}" class="form-label">Contact Information</label>
+-                        {{ form.contact_info }}
+-                    </div>
+-                    <div class="mb-3">
+-                        <label for="{{ form.tags_input.id_for_label }}" class="form-label">Tags</label>
+-                        {{ form.tags_input }}
+-                        <small class="form-text text-muted">Enter tags separated by commas (e.g., "red, leather, wallet")</small>
+-                    </div>
+-                    <button type="submit" class="btn btn-primary">Submit</button>
+-                </form>
+-            </div>
++<div class="row mb-4">
++    <div class="col-md-6 offset-md-3 text-center">
++        <h1 class="mb-4">Lost and Found</h1>
++        <div class="d-grid gap-3">
++            <a href="{% url 'report_found' %}" class="btn btn-primary btn-lg">I Found Something</a>
++            <a href="{% url 'report_lost' %}" class="btn btn-secondary btn-lg">I Lost Something</a>
+         </div>
+     </div>
+-    <div class="col-md-6">
+-        <h2>Recent Items</h2>
++</div>
++
++<div class="row">
++    <div class="col-12">
++        <h2 class="mb-4">Recent Items</h2>
+         {% for item in items %}
+         <div class="card mb-3">
+             <div class="card-body">
+diff --git a/items/templates/items/report_found.html b/items/templates/items/report_found.html
+index febb846..01c0a5c 100644
+--- a/items/templates/items/report_found.html
++++ b/items/templates/items/report_found.html
+@@ -1,53 +1,37 @@
+-<!DOCTYPE html>
+-<html lang="en">
+-<head>
+-    <meta charset="UTF-8">
+-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+-    <title>Report Found Item - Lost and Found</title>
+-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+-</head>
+-<body>
+-    <div class="container mt-5">
+-        <div class="row">
+-            <div class="col-md-8 mx-auto">
+-                <a href="{% url 'home' %}" class="btn btn-outline-secondary mb-4">&larr; Back to Home</a>
+-                
+-                {% if messages %}
+-                    {% for message in messages %}
+-                        <div class="alert alert-{{ message.tags }}">
+-                            {{ message }}
+-                        </div>
+-                    {% endfor %}
+-                {% endif %}
++{% extends 'base.html' %}
++{% load widget_tweaks %}
+ 
+-                <div class="card">
+-                    <div class="card-body">
+-                        <h2 class="card-title mb-4">Report a Found Item</h2>
+-                        <form method="post">
+-                            {% csrf_token %}
+-                            {% load widget_tweaks %}
+-                            {% for field in form %}
+-                                <div class="mb-3">
+-                                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+-                                    {% if field.errors %}
+-                                        {{ field|add_class:"form-control is-invalid" }}
+-                                        <div class="invalid-feedback">
+-                                            {{ field.errors|join:", " }}
+-                                        </div>
+-                                    {% else %}
+-                                        {{ field|add_class:"form-control" }}
+-                                    {% endif %}
+-                                    {% if field.help_text %}
+-                                        <div class="form-text">{{ field.help_text }}</div>
+-                                    {% endif %}
+-                                </div>
+-                            {% endfor %}
+-                            <button type="submit" class="btn btn-success">Submit Found Item</button>
+-                        </form>
++{% block content %}
++<div class="row">
++    <div class="col-md-8 offset-md-2">
++        <div class="card">
++            <div class="card-body">
++                <h2 class="card-title mb-4">Report a Found Item</h2>
++                <form method="post">
++                    {% csrf_token %}
++                    <div class="mb-3">
++                        <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
++                        {{ form.title }}
+                     </div>
+-                </div>
++                    <div class="mb-3">
++                        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
++                        {{ form.description }}
++                    </div>
++                    <div class="mb-3">
++                        <label for="{{ form.location.id_for_label }}" class="form-label">Location</label>
++                        {{ form.location }}
++                    </div>
++                    <div class="mb-3">
++                        <label for="{{ form.contact_info.id_for_label }}" class="form-label">Contact Information</label>
++                        {{ form.contact_info }}
++                    </div>
++                    <div class="d-grid gap-2">
++                        <button type="submit" class="btn btn-primary">Submit Found Item</button>
++                        <a href="{% url 'home' %}" class="btn btn-secondary">Cancel</a>
++                    </div>
++                </form>
+             </div>
+         </div>
+     </div>
+-</body>
+-</html> 
+\ No newline at end of file
++</div>
++{% endblock %} 
+\ No newline at end of file
+diff --git a/items/templates/items/report_lost.html b/items/templates/items/report_lost.html
+index b525d59..59d09d4 100644
+--- a/items/templates/items/report_lost.html
++++ b/items/templates/items/report_lost.html
+@@ -1,53 +1,37 @@
+-<!DOCTYPE html>
+-<html lang="en">
+-<head>
+-    <meta charset="UTF-8">
+-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+-    <title>Report Lost Item - Lost and Found</title>
+-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+-</head>
+-<body>
+-    <div class="container mt-5">
+-        <div class="row">
+-            <div class="col-md-8 mx-auto">
+-                <a href="{% url 'home' %}" class="btn btn-outline-secondary mb-4">&larr; Back to Home</a>
+-                
+-                {% if messages %}
+-                    {% for message in messages %}
+-                        <div class="alert alert-{{ message.tags }}">
+-                            {{ message }}
+-                        </div>
+-                    {% endfor %}
+-                {% endif %}
++{% extends 'base.html' %}
++{% load widget_tweaks %}
+ 
+-                <div class="card">
+-                    <div class="card-body">
+-                        <h2 class="card-title mb-4">Report a Lost Item</h2>
+-                        <form method="post">
+-                            {% csrf_token %}
+-                            {% load widget_tweaks %}
+-                            {% for field in form %}
+-                                <div class="mb-3">
+-                                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+-                                    {% if field.errors %}
+-                                        {{ field|add_class:"form-control is-invalid" }}
+-                                        <div class="invalid-feedback">
+-                                            {{ field.errors|join:", " }}
+-                                        </div>
+-                                    {% else %}
+-                                        {{ field|add_class:"form-control" }}
+-                                    {% endif %}
+-                                    {% if field.help_text %}
+-                                        <div class="form-text">{{ field.help_text }}</div>
+-                                    {% endif %}
+-                                </div>
+-                            {% endfor %}
+-                            <button type="submit" class="btn btn-danger">Submit Lost Item</button>
+-                        </form>
++{% block content %}
++<div class="row">
++    <div class="col-md-8 offset-md-2">
++        <div class="card">
++            <div class="card-body">
++                <h2 class="card-title mb-4">Report a Lost Item</h2>
++                <form method="post">
++                    {% csrf_token %}
++                    <div class="mb-3">
++                        <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
++                        {{ form.title }}
+                     </div>
+-                </div>
++                    <div class="mb-3">
++                        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
++                        {{ form.description }}
++                    </div>
++                    <div class="mb-3">
++                        <label for="{{ form.location.id_for_label }}" class="form-label">Location</label>
++                        {{ form.location }}
++                    </div>
++                    <div class="mb-3">
++                        <label for="{{ form.contact_info.id_for_label }}" class="form-label">Contact Information</label>
++                        {{ form.contact_info }}
++                    </div>
++                    <div class="d-grid gap-2">
++                        <button type="submit" class="btn btn-primary">Submit Lost Item</button>
++                        <a href="{% url 'home' %}" class="btn btn-secondary">Cancel</a>
++                    </div>
++                </form>
+             </div>
+         </div>
+     </div>
+-</body>
+-</html> 
+\ No newline at end of file
++</div>
++{% endblock %} 
+\ No newline at end of file
+diff --git a/items/urls.py b/items/urls.py
+index 7a1fa8c..0c0d688 100644
+--- a/items/urls.py
++++ b/items/urls.py
+@@ -3,4 +3,6 @@ from . import views
+ 
+ urlpatterns = [
+     path('', views.home, name='home'),
++    path('report/found/', views.report_found, name='report_found'),
++    path('report/lost/', views.report_lost, name='report_lost'),
+ ] 
+\ No newline at end of file
+diff --git a/items/views.py b/items/views.py
+index 60c360f..5c8d7e4 100644
+--- a/items/views.py
++++ b/items/views.py
+@@ -1,31 +1,32 @@
+ from django.shortcuts import render, redirect
+ from django.contrib import messages
+ from .models import Item
+-from .forms import ItemForm
++from .forms import FoundItemForm, LostItemForm
++import logging
++
++logger = logging.getLogger(__name__)
+ 
+ def home(request):
+-    if request.method == 'POST':
+-        form = ItemForm(request.POST)
+-        if form.is_valid():
+-            form.save()
+-            messages.success(request, 'Item reported successfully!')
+-            return redirect('home')
+-    else:
+-        form = ItemForm()
+-    
+     items = Item.objects.all().order_by('-date')
+-    return render(request, 'items/home.html', {
+-        'form': form,
+-        'items': items
+-    })
++    return render(request, 'items/home.html', {'items': items})
+ 
+ def report_found(request):
+     if request.method == 'POST':
++        logger.debug("Processing POST request for found item")
+         form = FoundItemForm(request.POST)
+         if form.is_valid():
+-            form.save()
+-            messages.success(request, 'Found item has been successfully listed!')
++            logger.debug("Found item form is valid, saving")
++            try:
++                item = form.save()
++                logger.debug(f"Found item saved successfully. ID: {item.id}")
++                logger.debug(f"Tags after save: {list(item.tags.all())}")
++                messages.success(request, 'Found item has been reported successfully!')
++            except Exception as e:
++                logger.error(f"Error saving found item: {str(e)}")
++                messages.error(request, 'Error saving item')
+             return redirect('home')
++        else:
++            logger.error(f"Form errors: {form.errors}")
+     else:
+         form = FoundItemForm()
+     
+@@ -33,11 +34,21 @@ def report_found(request):
+ 
+ def report_lost(request):
+     if request.method == 'POST':
++        logger.debug("Processing POST request for lost item")
+         form = LostItemForm(request.POST)
+         if form.is_valid():
+-            form.save()
+-            messages.success(request, 'Lost item has been successfully listed!')
++            logger.debug("Lost item form is valid, saving")
++            try:
++                item = form.save()
++                logger.debug(f"Lost item saved successfully. ID: {item.id}")
++                logger.debug(f"Tags after save: {list(item.tags.all())}")
++                messages.success(request, 'Lost item has been reported successfully!')
++            except Exception as e:
++                logger.error(f"Error saving lost item: {str(e)}")
++                messages.error(request, 'Error saving item')
+             return redirect('home')
++        else:
++            logger.error(f"Form errors: {form.errors}")
+     else:
+         form = LostItemForm()
+     
+diff --git a/lost_and_found/__pycache__/settings.cpython-313.pyc b/lost_and_found/__pycache__/settings.cpython-313.pyc
+index a74ff29..e083528 100644
+Binary files a/lost_and_found/__pycache__/settings.cpython-313.pyc and b/lost_and_found/__pycache__/settings.cpython-313.pyc differ
+diff --git a/lost_and_found/settings.py b/lost_and_found/settings.py
+index 0bc8dab..13f9f72 100644
+--- a/lost_and_found/settings.py
++++ b/lost_and_found/settings.py
+@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
+ """
+ 
+ from pathlib import Path
++import os
+ 
+ # Build paths inside the project like this: BASE_DIR / 'subdir'.
+ BASE_DIR = Path(__file__).resolve().parent.parent
+@@ -123,3 +124,34 @@ STATIC_URL = 'static/'
+ # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
+ 
+ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
++
++# OpenAI Configuration
++OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
++
++# Weights & Biases Configuration
++WANDB_PROJECT = 'lost-and-found'
++WANDB_ENTITY = None  # Set this to your W&B username or team name if needed
++WANDB_API_KEY = os.environ.get('WANDB_API_KEY')  # Make sure to set this in your environment
++
++# Logging Configuration
++LOGGING = {
++    'version': 1,
++    'disable_existing_loggers': False,
++    'handlers': {
++        'console': {
++            'class': 'logging.StreamHandler',
++            'level': 'DEBUG',
++        },
++    },
++    'root': {
++        'handlers': ['console'],
++        'level': 'DEBUG',
++    },
++    'loggers': {
++        'items': {
++            'handlers': ['console'],
++            'level': 'DEBUG',
++            'propagate': True,
++        },
++    },
++}
+diff --git a/lost_and_found/templates/base.html b/lost_and_found/templates/base.html
+index 382f93f..5374204 100644
+--- a/lost_and_found/templates/base.html
++++ b/lost_and_found/templates/base.html
+@@ -19,12 +19,27 @@
+                     <li class="nav-item">
+                         <a class="nav-link" href="/">Home</a>
+                     </li>
++                    <li class="nav-item">
++                        <a class="nav-link" href="{% url 'report_found' %}">Report Found</a>
++                    </li>
++                    <li class="nav-item">
++                        <a class="nav-link" href="{% url 'report_lost' %}">Report Lost</a>
++                    </li>
+                 </ul>
+             </div>
+         </div>
+     </nav>
+ 
+     <div class="container">
++        {% if messages %}
++            {% for message in messages %}
++                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
++                    {{ message }}
++                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
++                </div>
++            {% endfor %}
++        {% endif %}
++
+         {% block content %}
+         {% endblock %}
+     </div>
+diff --git a/venv/bin/Activate.ps1 b/venv/bin/Activate.ps1
+index 2fb3852..16ba529 100644
+--- a/venv/bin/Activate.ps1
++++ b/venv/bin/Activate.ps1
+@@ -96,6 +96,11 @@ function global:deactivate ([switch]$NonDestructive) {
+         Remove-Item -Path env:VIRTUAL_ENV
+     }
+ 
++    # Just remove VIRTUAL_ENV_PROMPT altogether.
++    if (Test-Path -Path Env:VIRTUAL_ENV_PROMPT) {
++        Remove-Item -Path env:VIRTUAL_ENV_PROMPT
++    }
++
+     # Just remove the _PYTHON_VENV_PROMPT_PREFIX altogether:
+     if (Get-Variable -Name "_PYTHON_VENV_PROMPT_PREFIX" -ErrorAction SilentlyContinue) {
+         Remove-Variable -Name _PYTHON_VENV_PROMPT_PREFIX -Scope Global -Force
+@@ -197,7 +202,7 @@ else {
+         $Prompt = $pyvenvCfg['prompt'];
+     }
+     else {
+-        Write-Verbose "  Setting prompt based on parent's directory's name. (Is the directory name passed to venv module when creating the virutal environment)"
++        Write-Verbose "  Setting prompt based on parent's directory's name. (Is the directory name passed to venv module when creating the virtual environment)"
+         Write-Verbose "  Got leaf-name of $VenvDir='$(Split-Path -Path $venvDir -Leaf)'"
+         $Prompt = Split-Path -Path $venvDir -Leaf
+     }
+@@ -214,6 +219,8 @@ deactivate -nondestructive
+ # that there is an activated venv.
+ $env:VIRTUAL_ENV = $VenvDir
+ 
++$env:VIRTUAL_ENV_PROMPT = $Prompt
++
+ if (-not $Env:VIRTUAL_ENV_DISABLE_PROMPT) {
+ 
+     Write-Verbose "Setting prompt to '$Prompt'"
+diff --git a/venv/bin/activate b/venv/bin/activate
+index b999770..c28caf9 100644
+--- a/venv/bin/activate
++++ b/venv/bin/activate
+@@ -1,5 +1,5 @@
+ # This file must be used with "source bin/activate" *from bash*
+-# you cannot run it directly
++# You cannot run it directly
+ 
+ deactivate () {
+     # reset old environment variables
+@@ -14,12 +14,9 @@ deactivate () {
+         unset _OLD_VIRTUAL_PYTHONHOME
+     fi
+ 
+-    # This should detect bash and zsh, which have a hash command that must
+-    # be called to get it to forget past commands.  Without forgetting
++    # Call hash to forget past commands. Without forgetting
+     # past commands the $PATH changes we made may not be respected
+-    if [ -n "${BASH:-}" -o -n "${ZSH_VERSION:-}" ] ; then
+-        hash -r 2> /dev/null
+-    fi
++    hash -r 2> /dev/null
+ 
+     if [ -n "${_OLD_VIRTUAL_PS1:-}" ] ; then
+         PS1="${_OLD_VIRTUAL_PS1:-}"
+@@ -28,6 +25,7 @@ deactivate () {
+     fi
+ 
+     unset VIRTUAL_ENV
++    unset VIRTUAL_ENV_PROMPT
+     if [ ! "${1:-}" = "nondestructive" ] ; then
+     # Self destruct!
+         unset -f deactivate
+@@ -37,13 +35,27 @@ deactivate () {
+ # unset irrelevant variables
+ deactivate nondestructive
+ 
+-VIRTUAL_ENV="/Users/joe.cloughley/Documents/App projects/lost-and-found/venv"
+-export VIRTUAL_ENV
++# on Windows, a path can contain colons and backslashes and has to be converted:
++case "$(uname)" in
++    CYGWIN*|MSYS*)
++        # transform D:\path\to\venv to /d/path/to/venv on MSYS
++        # and to /cygdrive/d/path/to/venv on Cygwin
++        VIRTUAL_ENV=$(cygpath "/Users/joe.cloughley/Documents/App projects/lost-and-found/venv")
++        export VIRTUAL_ENV
++        ;;
++    *)
++        # use the path as-is
++        export VIRTUAL_ENV="/Users/joe.cloughley/Documents/App projects/lost-and-found/venv"
++        ;;
++esac
+ 
+ _OLD_VIRTUAL_PATH="$PATH"
+ PATH="$VIRTUAL_ENV/bin:$PATH"
+ export PATH
+ 
++VIRTUAL_ENV_PROMPT="venv"
++export VIRTUAL_ENV_PROMPT
++
+ # unset PYTHONHOME if set
+ # this will fail if PYTHONHOME is set to the empty string (which is bad anyway)
+ # could use `if (set -u; : $PYTHONHOME) ;` in bash
+@@ -58,9 +70,6 @@ if [ -z "${VIRTUAL_ENV_DISABLE_PROMPT:-}" ] ; then
+     export PS1
+ fi
+ 
+-# This should detect bash and zsh, which have a hash command that must
+-# be called to get it to forget past commands.  Without forgetting
++# Call hash to forget past commands. Without forgetting
+ # past commands the $PATH changes we made may not be respected
+-if [ -n "${BASH:-}" -o -n "${ZSH_VERSION:-}" ] ; then
+-    hash -r 2> /dev/null
+-fi
++hash -r 2> /dev/null
+diff --git a/venv/bin/activate.csh b/venv/bin/activate.csh
+index fa8df28..bbce001 100644
+--- a/venv/bin/activate.csh
++++ b/venv/bin/activate.csh
+@@ -1,9 +1,10 @@
+ # This file must be used with "source bin/activate.csh" *from csh*.
+ # You cannot run it directly.
++
+ # Created by Davide Di Blasi <davidedb@gmail.com>.
+ # Ported to Python 3.3 venv by Andrew Svetlov <andrew.svetlov@gmail.com>
+ 
+-alias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH "$_OLD_VIRTUAL_PATH" && unset _OLD_VIRTUAL_PATH; rehash; test $?_OLD_VIRTUAL_PROMPT != 0 && set prompt="$_OLD_VIRTUAL_PROMPT" && unset _OLD_VIRTUAL_PROMPT; unsetenv VIRTUAL_ENV; test "\!:*" != "nondestructive" && unalias deactivate'
++alias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH "$_OLD_VIRTUAL_PATH" && unset _OLD_VIRTUAL_PATH; rehash; test $?_OLD_VIRTUAL_PROMPT != 0 && set prompt="$_OLD_VIRTUAL_PROMPT" && unset _OLD_VIRTUAL_PROMPT; unsetenv VIRTUAL_ENV; unsetenv VIRTUAL_ENV_PROMPT; test "\!:*" != "nondestructive" && unalias deactivate'
+ 
+ # Unset irrelevant variables.
+ deactivate nondestructive
+@@ -12,6 +13,7 @@ setenv VIRTUAL_ENV "/Users/joe.cloughley/Documents/App projects/lost-and-found/v
+ 
+ set _OLD_VIRTUAL_PATH="$PATH"
+ setenv PATH "$VIRTUAL_ENV/bin:$PATH"
++setenv VIRTUAL_ENV_PROMPT "venv"
+ 
+ 
+ set _OLD_VIRTUAL_PROMPT="$prompt"
+diff --git a/venv/bin/activate.fish b/venv/bin/activate.fish
+index cacc133..656a034 100644
+--- a/venv/bin/activate.fish
++++ b/venv/bin/activate.fish
+@@ -1,5 +1,5 @@
+ # This file must be used with "source <venv>/bin/activate.fish" *from fish*
+-# (https://fishshell.com/); you cannot run it directly.
++# (https://fishshell.com/). You cannot run it directly.
+ 
+ function deactivate  -d "Exit virtual environment and return to normal shell environment"
+     # reset old environment variables
+@@ -13,13 +13,17 @@ function deactivate  -d "Exit virtual environment and return to normal shell env
+     end
+ 
+     if test -n "$_OLD_FISH_PROMPT_OVERRIDE"
+-        functions -e fish_prompt
+         set -e _OLD_FISH_PROMPT_OVERRIDE
+-        functions -c _old_fish_prompt fish_prompt
+-        functions -e _old_fish_prompt
++        # prevents error when using nested fish instances (Issue #93858)
++        if functions -q _old_fish_prompt
++            functions -e fish_prompt
++            functions -c _old_fish_prompt fish_prompt
++            functions -e _old_fish_prompt
++        end
+     end
+ 
+     set -e VIRTUAL_ENV
++    set -e VIRTUAL_ENV_PROMPT
+     if test "$argv[1]" != "nondestructive"
+         # Self-destruct!
+         functions -e deactivate
+@@ -33,6 +37,7 @@ set -gx VIRTUAL_ENV "/Users/joe.cloughley/Documents/App projects/lost-and-found/
+ 
+ set -gx _OLD_VIRTUAL_PATH $PATH
+ set -gx PATH "$VIRTUAL_ENV/bin" $PATH
++set -gx VIRTUAL_ENV_PROMPT "venv"
+ 
+ # Unset PYTHONHOME if set.
+ if set -q PYTHONHOME
+@@ -52,7 +57,7 @@ if test -z "$VIRTUAL_ENV_DISABLE_PROMPT"
+         set -l old_status $status
+ 
+         # Output the venv prompt; color taken from the blue of the Python logo.
+-        printf "%s%s%s" (set_color 4B8BBE) "(venv) " (set_color normal)
++        printf "%s(%s)%s " (set_color 4B8BBE) "venv" (set_color normal)
+ 
+         # Restore the return status of the previous command.
+         echo "exit $old_status" | .
+diff --git a/venv/pyvenv.cfg b/venv/pyvenv.cfg
+index 4760c1f..acc13b7 100644
+--- a/venv/pyvenv.cfg
++++ b/venv/pyvenv.cfg
+@@ -1,3 +1,5 @@
+-home = /Library/Developer/CommandLineTools/usr/bin
++home = /Users/joe.cloughley/.pyenv/versions/3.13.0a5/bin
+ include-system-site-packages = false
+-version = 3.9.6
++version = 3.13.0
++executable = /Users/joe.cloughley/.pyenv/versions/3.13.0a5/bin/python3.13
++command = /Users/joe.cloughley/.pyenv/versions/3.13.0a5/bin/python -m venv /Users/joe.cloughley/Documents/App projects/lost-and-found/venv
