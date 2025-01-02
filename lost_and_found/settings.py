@@ -56,7 +56,7 @@ ROOT_URLCONF = 'lost_and_found.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'lost_and_found' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

@@ -1,23 +1,25 @@
 from django.db import models
+from django.utils import timezone
+
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    
+    def __str__(self):
+        return self.name
 
 class Item(models.Model):
-    LOST = 'lost'
-    FOUND = 'found'
-    ITEM_TYPE_CHOICES = [
-        (LOST, 'Lost'),
-        (FOUND, 'Found'),
+    ITEM_STATUS = [
+        ('lost', 'Lost'),
+        ('found', 'Found'),
     ]
-
-    name = models.CharField(max_length=200)
+    
+    title = models.CharField(max_length=200)
     description = models.TextField()
     location = models.CharField(max_length=200)
-    date = models.DateTimeField(auto_now_add=True)
+    date = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=5, choices=ITEM_STATUS)
     contact_info = models.CharField(max_length=200)
-    item_type = models.CharField(max_length=5, choices=ITEM_TYPE_CHOICES)
-    is_resolved = models.BooleanField(default=False)
-
+    tags = models.ManyToManyField(Tag, blank=True)
+    
     def __str__(self):
-        return f"{self.get_item_type_display()} item: {self.name}"
-
-    class Meta:
-        ordering = ['-date']
+        return f"{self.get_status_display()}: {self.title}"

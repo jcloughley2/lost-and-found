@@ -1,11 +1,23 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from .forms import LostItemForm, FoundItemForm
 from .models import Item
+from .forms import ItemForm
 
 def home(request):
-    items = Item.objects.all()  # ordering is handled by model Meta
-    return render(request, 'items/home.html', {'items': items})
+    if request.method == 'POST':
+        form = ItemForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Item reported successfully!')
+            return redirect('home')
+    else:
+        form = ItemForm()
+    
+    items = Item.objects.all().order_by('-date')
+    return render(request, 'items/home.html', {
+        'form': form,
+        'items': items
+    })
 
 def report_found(request):
     if request.method == 'POST':
