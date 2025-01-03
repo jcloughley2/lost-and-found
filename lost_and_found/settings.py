@@ -118,7 +118,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'lost_and_found' / 'static',
+]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Media files (Uploads)
 MEDIA_URL = '/media/'
@@ -131,3 +135,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # OpenAI Configuration
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+
+# Authentication settings
+LOGIN_REDIRECT_URL = '/'  # Redirect to home page after login

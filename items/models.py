@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from .tag_utils import generate_tags
 import logging
+from django.contrib.auth.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class Item(models.Model):
     contact_info = models.CharField(max_length=200)
     tags = models.ManyToManyField(Tag, blank=True)
     image = models.ImageField(upload_to='items/', blank=True, null=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     
     def __str__(self):
         return f"{self.title} ({self.status})"

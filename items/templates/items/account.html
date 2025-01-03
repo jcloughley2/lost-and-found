@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Your Posted Items</h2>
+    {% for item in user_items %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">{{ item.title }}</h5>
+            <p class="card-text">{{ item.description }}</p>
+            <p class="card-text"><small class="text-muted">Location: {{ item.location }}</small></p>
+            <p class="card-text"><small class="text-muted">Date: {{ item.date }}</small></p>
+            <p class="card-text"><small class="text-muted">Status: {{ item.status }}</small></p>
+            <p class="card-text"><small class="text-muted">Contact: {{ item.contact_info }}</small></p>
+            {% if item.image %}
+                <img src="{{ item.image.url }}" class="img-fluid" alt="Item image">
+            {% endif %}
+        </div>
+    </div>
+    {% empty %}
+    <p>You have not posted any items yet.</p>
+    {% endfor %}
+</div>
+{% endblock %} 

@@ -18,11 +18,27 @@ from django.contrib import admin
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
-from items.views import home, report_lost, report_found
+from items.views import home, report_lost, report_found, account
+from django.contrib.auth import views as auth_views
+from items import views as item_views
+from django.contrib import messages
+
+class CustomLogoutView(auth_views.LogoutView):
+    def dispatch(self, request, *args, **kwargs):
+        messages.success(request, 'You have been successfully logged out.')
+        return super().dispatch(request, *args, **kwargs)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
     path('report-lost/', report_lost, name='report_lost'),
     path('report-found/', report_found, name='report_found'),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    path('register/', item_views.register, name='register'),
+    path('login/', auth_views.LoginView.as_view(template_name='items/login.html'), name='login'),
+    path('logout/', CustomLogoutView.as_view(template_name='items/logout.html', next_page='home'), name='logout'),
+    path('account/', account, name='account'),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
