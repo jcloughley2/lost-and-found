@@ -24,6 +24,7 @@ class Item(models.Model):
     status = models.CharField(max_length=5, choices=ITEM_STATUS)
     contact_info = models.CharField(max_length=200)
     tags = models.ManyToManyField(Tag, blank=True)
+    image = models.ImageField(upload_to='items/', blank=True, null=True)
     
     def __str__(self):
         return f"{self.title} ({self.status})"

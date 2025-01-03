@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
 from items.views import home, report_lost, report_found
 
 urlpatterns = [
@@ -23,4 +25,4 @@ urlpatterns = [
     path('', home, name='home'),
     path('report-lost/', report_lost, name='report_lost'),
     path('report-found/', report_found, name='report_found'),
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

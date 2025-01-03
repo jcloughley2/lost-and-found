@@ -13,7 +13,7 @@ def home(request):
 def report_found(request):
     if request.method == 'POST':
         logger.debug("Processing POST request for found item")
-        form = FoundItemForm(request.POST)
+        form = FoundItemForm(request.POST, request.FILES)
         if form.is_valid():
             logger.debug("Found item form is valid, saving")
             try:
@@ -35,7 +35,7 @@ def report_found(request):
 def report_lost(request):
     if request.method == 'POST':
         logger.debug("Processing POST request for lost item")
-        form = LostItemForm(request.POST)
+        form = LostItemForm(request.POST, request.FILES)
         if form.is_valid():
             logger.debug("Lost item form is valid, saving")
             try:

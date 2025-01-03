@@ -4,12 +4,13 @@ from .models import Item
 class ItemFormBase(forms.ModelForm):
     class Meta:
         model = Item
-        fields = ['title', 'description', 'location', 'contact_info']
+        fields = ['title', 'description', 'location', 'contact_info', 'image']
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'location': forms.TextInput(attrs={'class': 'form-control'}),
             'contact_info': forms.TextInput(attrs={'class': 'form-control'}),
+            'image': forms.FileInput(attrs={'class': 'form-control'}),
         }
 
 class FoundItemForm(ItemFormBase):
