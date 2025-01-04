@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    /* Remove browser's default clear button */
+    input[type="text"]::-ms-clear,
+    input[type="text"]::-ms-reveal,
+    input[type="text"]::-webkit-search-decoration,
+    input[type="text"]::-webkit-search-cancel-button,
+    input[type="text"]::-webkit-search-results-button,
+    input[type="text"]::-webkit-search-results-decoration {
+        display: none;
+    }
+</style>
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <form action="{% url 'all_items' %}" method="get" class="d-flex">
+                <input type="text" name="q" class="form-control me-2" placeholder="Search items..." value="{{ query }}" aria-label="Search">
+                <button class="btn btn-outline-primary me-2" type="submit">Search</button>
+                {% if query %}
+                    <a href="{% url 'all_items' %}" class="btn btn-outline-secondary">✕</a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            {% if query %}
+                <h2 class="mb-4">Results for "{{ query }}"</h2>
+                {% if not items %}
+                    <p>No items found matching your search.</p>
+                {% endif %}
+            {% else %}
+                <h2 class="mb-4">All Lost and Found Items</h2>
+            {% endif %}
+
+            {% for item in items %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">{{ item.title }}</h5>
+                    <h6 class="card-subtitle mb-2 text-muted">Reported by: {{ item.user.username }}</h6>
+                    <p class="card-text">{{ item.description }}</p>
+                    <p class="card-text"><small class="text-muted">Location: {{ item.location }}</small></p>
+                    <p class="card-text"><small class="text-muted">Date: {{ item.date }}</small></p>
+                    <p class="card-text"><small class="text-muted">Status: {{ item.status }}</small></p>
+                    <p class="card-text"><small class="text-muted">Contact: {{ item.contact_info }}</small></p>
+                    <p class="card-text"><small class="text-muted">Tags: 
+                        {% for tag in item.tags.all %}
+                            <span class="badge bg-secondary">{{ tag.name }}</span>
+                        {% empty %}
+                            No tags
+                        {% endfor %}
+                    </small></p>
+                    {% if item.image %}
+                        <img src="{{ item.image.url }}" class="img-fluid" alt="Item image">
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+            {% if not query %}
+                <p>No items reported yet.</p>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

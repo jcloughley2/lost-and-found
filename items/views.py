@@ -7,12 +7,30 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from .ai_utils import analyze_image
+from django.db import models
 
 logger = logging.getLogger(__name__)
 
 def home(request):
-    items = Item.objects.all().order_by('-date')
+    items = Item.objects.all().order_by('-date')[:5]
     return render(request, 'items/home.html', {'items': items})
+
+def all_items(request):
+    query = request.GET.get('q', '')
+    items = Item.objects.all().order_by('-date')
+    
+    if query:
+        items = items.filter(
+            models.Q(title__icontains=query) |
+            models.Q(description__icontains=query) |
+            models.Q(location__icontains=query) |
+            models.Q(tags__name__icontains=query)
+        ).distinct()
+    
+    return render(request, 'items/all_items.html', {
+        'items': items,
+        'query': query
+    })
 
 @login_required
 def report_found(request):
