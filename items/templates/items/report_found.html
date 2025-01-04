@@ -2,12 +2,18 @@
 {% load widget_tweaks %}
 
 {% block content %}
+<style>
+    .pac-container {
+        z-index: 1051 !important;
+    }
+</style>
+
 <div class="row">
     <div class="col-md-8 offset-md-2">
         <div class="card">
             <div class="card-body">
                 <h2 class="card-title mb-4">Report a Found Item</h2>
-                <form method="post" enctype="multipart/form-data">
+                <form method="post" enctype="multipart/form-data" id="mainForm">
                     {% csrf_token %}
                     <div class="mb-3">
                         <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
@@ -19,15 +25,22 @@
                     </div>
                     <div class="mb-3">
                         <label for="{{ form.location.id_for_label }}" class="form-label">Location</label>
-                        {{ form.location }}
+                        {{ form.location|add_class:"form-control" }}
                     </div>
                     <div class="mb-3">
                         <label for="{{ form.contact_info.id_for_label }}" class="form-label">Contact Information</label>
                         {{ form.contact_info }}
                     </div>
                     <div class="mb-3">
-                        <label for="{{ form.image.id_for_label }}" class="form-label">Image (optional)</label>
-                        {{ form.image }}
+                        <label for="{{ image_form.image.id_for_label }}" class="form-label">Upload Image</label>
+                        <div id="imageUploadSection">
+                            {% csrf_token %}
+                            {{ image_form.image }}
+                            <button type="button" class="btn btn-primary mt-2" id="uploadImageButton">
+                                <span id="spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+                                Upload Image
+                            </button>
+                        </div>
                     </div>
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary">Submit Found Item</button>
@@ -38,4 +51,75 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Image upload handling
+    document.getElementById('uploadImageButton').addEventListener('click', function() {
+        const formData = new FormData();
+        const imageInput = document.querySelector('#imageUploadSection input[type="file"]');
+        const spinner = document.getElementById('spinner');
+        
+        if (imageInput.files.length > 0) {
+            formData.append('image', imageInput.files[0]);
+            
+            spinner.style.display = 'inline-block';
+
+            fetch('{% url "upload_image" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                spinner.style.display = 'none';
+                if (data.suggested_title) {
+                    document.getElementById('{{ form.title.id_for_label }}').value = data.suggested_title;
+                }
+                if (data.suggested_description) {
+                    document.getElementById('{{ form.description.id_for_label }}').value = data.suggested_description;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                spinner.style.display = 'none';
+            });
+        } else {
+            alert('Please select an image first');
+        }
+    });
+
+    // Location autocomplete
+    function initAutocomplete() {
+        const input = document.getElementById('{{ form.location.id_for_label }}');
+        const autocomplete = new google.maps.places.Autocomplete(input, {
+            types: ['geocode', 'establishment'],
+            fields: ['name', 'formatted_address']
+        });
+
+        autocomplete.addListener('place_changed', function() {
+            const place = autocomplete.getPlace();
+            if (place) {
+                let locationText = '';
+                if (place.name && !place.formatted_address.startsWith(place.name)) {
+                    locationText = place.name + ' - ' + place.formatted_address;
+                } else {
+                    locationText = place.formatted_address;
+                }
+                input.value = locationText;
+            }
+        });
+
+        // Prevent form submission on enter key in location field
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+    }
+
+    // Initialize Google Places Autocomplete
+    google.maps.event.addDomListener(window, 'load', initAutocomplete);
+</script>
 {% endblock %} 
