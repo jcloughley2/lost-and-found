@@ -1,10 +1,12 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import Item
-from .forms import FoundItemForm, LostItemForm
+from .forms import FoundItemForm, LostItemForm, ImageUploadForm
 import logging
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from .ai_utils import analyze_image
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,9 @@ def report_found(request):
     else:
         form = FoundItemForm()
     
-    return render(request, 'items/report_found.html', {'form': form})
+    image_form = ImageUploadForm()
+
+    return render(request, 'items/report_found.html', {'form': form, 'image_form': image_form})
 
 @login_required
 def report_lost(request):
@@ -60,7 +64,8 @@ def report_lost(request):
     else:
         form = LostItemForm()
     
-    return render(request, 'items/report_lost.html', {'form': form})
+    image_form = ImageUploadForm()
+    return render(request, 'items/report_lost.html', {'form': form, 'image_form': image_form})
 
 def register(request):
     if request.method == 'POST':
@@ -78,3 +83,17 @@ def register(request):
 def account(request):
     user_items = Item.objects.filter(user=request.user).order_by('-date')
     return render(request, 'items/account.html', {'user_items': user_items})
+
+@login_required
+def upload_image(request):
+    if request.method == 'POST':
+        form = ImageUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            image = form.cleaned_data['image']
+            # Send image to OpenAI for title and description suggestions
+            suggested_title, suggested_description = analyze_image(image)
+            return JsonResponse({
+                'suggested_title': suggested_title,
+                'suggested_description': suggested_description
+            })
+    return JsonResponse({'error': 'Invalid request'}, status=400)
